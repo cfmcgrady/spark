@@ -47,10 +47,13 @@ class QueueInputDStream[T: ClassTag](
   }
 
   override def compute(validTime: Time): Option[RDD[T]] = {
+    // 为什么需要一个buffer数组
     val buffer = new ArrayBuffer[RDD[T]]()
+    // 如果每次取一条 && 队列长度>0 取一个RDD
     if (oneAtATime && queue.size > 0) {
       buffer += queue.dequeue()
     } else {
+      // 全部取出来
       buffer ++= queue.dequeueAll(_ => true)
     }
     if (buffer.size > 0) {

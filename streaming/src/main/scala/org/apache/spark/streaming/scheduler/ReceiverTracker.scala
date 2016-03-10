@@ -411,6 +411,7 @@ class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false
    * worker nodes as a parallel collection, and runs them.
    */
   private def launchReceivers(): Unit = {
+    //  获取所有的receiver，并将他们的id设置为该dstream的id
     val receivers = receiverInputStreams.map(nis => {
       val rcvr = nis.getReceiver()
       rcvr.setReceiverId(nis.id)
