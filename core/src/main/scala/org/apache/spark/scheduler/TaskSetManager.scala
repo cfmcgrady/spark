@@ -63,6 +63,8 @@ private[spark] class TaskSetManager(
   // Quantile of tasks at which to start speculation
   val SPECULATION_QUANTILE = conf.getDouble("spark.speculation.quantile", 0.75)
   val SPECULATION_MULTIPLIER = conf.getDouble("spark.speculation.multiplier", 1.5)
+  val TASK_SIZE_LIMIT_ENABLE = conf.getBoolean("spark.taskset.resource.offer.limit.enable", false)
+  val TASK_MAX_SIZE = conf.getInt("spark.taskset.resource.offer.max.size", Integer.MAX_VALUE)
 
   // Limit of bytes for total size of results (default is 1GB)
   val maxResultSize = Utils.getMaxResultSize(conf)
@@ -437,6 +439,10 @@ private[spark] class TaskSetManager(
       maxLocality: TaskLocality.TaskLocality)
     : Option[TaskDescription] =
   {
+    if (TASK_SIZE_LIMIT_ENABLE && runningTasksSet.size >= TASK_MAX_SIZE) {
+      logInfo(s"${taskSet.id} running tasks: ${runningTasksSet.size} exceed limit ${TASK_MAX_SIZE}")
+      return None
+    }
     val offerBlacklisted = taskSetBlacklistHelperOpt.exists { blacklist =>
       blacklist.isNodeBlacklistedForTaskSet(host) ||
         blacklist.isExecutorBlacklistedForTaskSet(execId)
