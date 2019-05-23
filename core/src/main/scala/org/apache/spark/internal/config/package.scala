@@ -20,7 +20,9 @@ package org.apache.spark.internal
 import java.util.concurrent.TimeUnit
 
 import org.apache.spark.launcher.SparkLauncher
+import org.apache.spark.network.shuffle.Constants
 import org.apache.spark.network.util.ByteUnit
+import org.apache.spark.storage.{DefaultTopologyMapper, RandomBlockReplicationPolicy}
 import org.apache.spark.unsafe.array.ByteArrayMethods
 import org.apache.spark.util.Utils
 
@@ -124,6 +126,110 @@ package object config {
     .bytesConf(ByteUnit.MiB)
     .createOptional
 
+  private[spark] val MEMORY_STORAGE_FRACTION = ConfigBuilder("spark.memory.storageFraction")
+    .doc("Amount of storage memory immune to eviction, expressed as a fraction of the " +
+      "size of the region set aside by spark.memory.fraction. The higher this is, the " +
+      "less working memory may be available to execution and tasks may spill to disk more " +
+      "often. Leaving this at the default value is recommended. ")
+    .doubleConf
+    .checkValue(v => v >= 0.0 && v < 1.0, "Storage fraction must be in [0,1)")
+    .createWithDefault(0.5)
+
+  private[spark] val MEMORY_FRACTION = ConfigBuilder("spark.memory.fraction")
+    .doc("Fraction of (heap space - 300MB) used for execution and storage. The " +
+      "lower this is, the more frequently spills and cached data eviction occur. " +
+      "The purpose of this config is to set aside memory for internal metadata, " +
+      "user data structures, and imprecise size estimation in the case of sparse, " +
+      "unusually large records. Leaving this at the default value is recommended.  ")
+    .doubleConf
+    .createWithDefault(0.6)
+
+  private[spark] val STORAGE_SAFETY_FRACTION = ConfigBuilder("spark.storage.safetyFraction")
+    .doubleConf
+    .createWithDefault(0.9)
+
+  private[spark] val STORAGE_UNROLL_MEMORY_THRESHOLD =
+    ConfigBuilder("spark.storage.unrollMemoryThreshold")
+      .doc("Initial memory to request before unrolling any block")
+      .longConf
+      .createWithDefault(1024 * 1024)
+
+  private[spark] val STORAGE_REPLICATION_PROACTIVE =
+    ConfigBuilder("spark.storage.replication.proactive")
+      .doc("Enables proactive block replication for RDD blocks. " +
+        "Cached RDD block replicas lost due to executor failures are replenished " +
+        "if there are any existing available replicas. This tries to " +
+        "get the replication level of the block to the initial number")
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val STORAGE_MEMORY_MAP_THRESHOLD =
+    ConfigBuilder("spark.storage.memoryMapThreshold")
+      .doc("Size in bytes of a block above which Spark memory maps when " +
+        "reading a block from disk. " +
+        "This prevents Spark from memory mapping very small blocks. " +
+        "In general, memory mapping has high overhead for blocks close to or below " +
+        "the page size of the operating system.")
+      .bytesConf(ByteUnit.BYTE)
+      .createWithDefaultString("2m")
+
+  private[spark] val STORAGE_REPLICATION_POLICY =
+    ConfigBuilder("spark.storage.replication.policy")
+      .stringConf
+      .createWithDefaultString(classOf[RandomBlockReplicationPolicy].getName)
+
+  private[spark] val STORAGE_REPLICATION_TOPOLOGY_MAPPER =
+    ConfigBuilder("spark.storage.replication.topologyMapper")
+      .stringConf
+      .createWithDefaultString(classOf[DefaultTopologyMapper].getName)
+
+  private[spark] val STORAGE_CACHED_PEERS_TTL = ConfigBuilder("spark.storage.cachedPeersTtl")
+    .intConf.createWithDefault(60 * 1000)
+
+  private[spark] val STORAGE_MAX_REPLICATION_FAILURE =
+    ConfigBuilder("spark.storage.maxReplicationFailures")
+      .intConf.createWithDefault(1)
+
+  private[spark] val STORAGE_REPLICATION_TOPOLOGY_FILE =
+    ConfigBuilder("spark.storage.replication.topologyFile").stringConf.createOptional
+
+  private[spark] val STORAGE_EXCEPTION_PIN_LEAK =
+    ConfigBuilder("spark.storage.exceptionOnPinLeak")
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val STORAGE_BLOCKMANAGER_TIMEOUTINTERVAL =
+    ConfigBuilder("spark.storage.blockManagerTimeoutIntervalMs")
+      .timeConf(TimeUnit.MILLISECONDS)
+      .createWithDefaultString("60s")
+
+  private[spark] val STORAGE_BLOCKMANAGER_SLAVE_TIMEOUT =
+    ConfigBuilder("spark.storage.blockManagerSlaveTimeoutMs")
+      .timeConf(TimeUnit.MILLISECONDS)
+      .createWithDefaultString(Network.NETWORK_TIMEOUT.defaultValueString)
+
+  private[spark] val STORAGE_CLEANUP_FILES_AFTER_EXECUTOR_EXIT =
+    ConfigBuilder("spark.storage.cleanupFilesAfterExecutorExit")
+      .doc("Whether or not cleanup the files not served by the external shuffle service " +
+        "on executor exits.")
+      .booleanConf
+      .createWithDefault(true)
+
+  private[spark] val DISKSTORE_SUB_DIRECTORIES =
+    ConfigBuilder("spark.diskStore.subDirectories")
+      .doc("Number of subdirectories inside each path listed in spark.local.dir for " +
+        "hashing Block files into.")
+      .intConf
+      .checkValue(_ > 0, "The number of subdirectories must be positive.")
+      .createWithDefault(64)
+
+  private[spark] val BLOCK_FAILURES_BEFORE_LOCATION_REFRESH =
+    ConfigBuilder("spark.block.failures.beforeLocationRefresh")
+      .doc("Max number of failures before this block manager refreshes " +
+        "the block locations from the driver.")
+      .intConf
+      .createWithDefault(5)
+
   private[spark] val IS_PYTHON_APP = ConfigBuilder("spark.yarn.isPython").internal()
     .booleanConf.createWithDefault(false)
 
@@ -149,6 +255,22 @@ package object config {
 
   private[spark] val SHUFFLE_SERVICE_ENABLED =
     ConfigBuilder("spark.shuffle.service.enabled").booleanConf.createWithDefault(false)
+
+  private[spark] val SHUFFLE_SERVICE_FETCH_RDD_ENABLED =
+    ConfigBuilder(Constants.SHUFFLE_SERVICE_FETCH_RDD_ENABLED)
+      .doc("Whether to use the ExternalShuffleService for fetching disk persisted RDD blocks. " +
+        "In case of dynamic allocation if this feature is enabled executors having only disk " +
+        "persisted blocks are considered idle after " +
+        "'spark.dynamicAllocation.executorIdleTimeout' and will be released accordingly.")
+      .booleanConf
+      .createWithDefault(true)
+
+  private[spark] val SHUFFLE_SERVICE_DB_ENABLED =
+    ConfigBuilder("spark.shuffle.service.db.enabled")
+      .doc("Whether to use db in ExternalShuffleService. Note that this only affects " +
+        "standalone mode.")
+      .booleanConf
+      .createWithDefault(true)
 
   private[spark] val SHUFFLE_SERVICE_PORT =
     ConfigBuilder("spark.shuffle.service.port").intConf.createWithDefault(7337)

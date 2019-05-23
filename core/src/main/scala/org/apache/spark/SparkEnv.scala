@@ -29,11 +29,12 @@ import com.google.common.collect.MapMaker
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.api.python.PythonWorkerFactory
 import org.apache.spark.broadcast.BroadcastManager
-import org.apache.spark.internal.Logging
+import org.apache.spark.internal.{config, Logging}
 import org.apache.spark.internal.config._
 import org.apache.spark.memory.{MemoryManager, StaticMemoryManager, UnifiedMemoryManager}
 import org.apache.spark.metrics.MetricsSystem
-import org.apache.spark.network.netty.NettyBlockTransferService
+import org.apache.spark.network.netty.{NettyBlockTransferService, SparkTransportConf}
+import org.apache.spark.network.shuffle.ExternalShuffleClient
 import org.apache.spark.rpc.{RpcEndpoint, RpcEndpointRef, RpcEnv}
 import org.apache.spark.scheduler.{LiveListenerBus, OutputCommitCoordinator}
 import org.apache.spark.scheduler.OutputCommitCoordinator.OutputCommitCoordinatorEndpoint
@@ -339,16 +340,41 @@ object SparkEnv extends Logging {
     val blockTransferService =
       new NettyBlockTransferService(conf, securityManager, bindAddress, advertiseAddress,
         blockManagerPort, numUsableCores)
+    val externalShuffleClient = if (conf.get(config.SHUFFLE_SERVICE_ENABLED)) {
+      val transConf = SparkTransportConf.fromSparkConf(conf, "shuffle", numUsableCores)
+      Some(new ExternalShuffleClient(transConf, securityManager,
+        securityManager.isAuthenticationEnabled(), conf.get(config.SHUFFLE_REGISTRATION_TIMEOUT)))
+    } else {
+      None
+    }
 
     val blockManagerMaster = new BlockManagerMaster(registerOrLookupEndpoint(
       BlockManagerMaster.DRIVER_ENDPOINT_NAME,
-      new BlockManagerMasterEndpoint(rpcEnv, isLocal, conf, listenerBus)),
+      new BlockManagerMasterEndpoint(
+        rpcEnv,
+        isLocal,
+        conf,
+        listenerBus,
+        if (conf.get(config.SHUFFLE_SERVICE_FETCH_RDD_ENABLED)) {
+          externalShuffleClient
+        } else {
+          None
+        })),
       conf, isDriver)
 
     // NB: blockManager is not valid until initialize() is called later.
-    val blockManager = new BlockManager(executorId, rpcEnv, blockManagerMaster,
-      serializerManager, conf, memoryManager, mapOutputTracker, shuffleManager,
-      blockTransferService, securityManager, numUsableCores)
+    val blockManager = new BlockManager(
+      executorId,
+      rpcEnv,
+      blockManagerMaster,
+      serializerManager,
+      conf,
+      memoryManager,
+      mapOutputTracker,
+      shuffleManager,
+      blockTransferService,
+      securityManager,
+      externalShuffleClient)
 
     val metricsSystem = if (isDriver) {
       // Don't start metrics system right now for Driver.

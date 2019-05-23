@@ -24,7 +24,9 @@ import scala.collection.mutable
 
 import sun.nio.ch.DirectBuffer
 
-import org.apache.spark.internal.Logging
+import org.apache.spark.SparkConf
+import org.apache.spark.internal.{config, Logging}
+import org.apache.spark.util.Utils
 
 /**
  * Storage information for each BlockManager.
@@ -212,6 +214,23 @@ private[spark] object StorageUtils extends Logging {
     val cleaner = buffer.cleaner()
     if (cleaner != null) {
       cleaner.clean()
+    }
+  }
+
+  /**
+   * Get the port used by the external shuffle service. In Yarn mode, this may be already be
+   * set through the Hadoop configuration as the server is launched in the Yarn NM.
+   */
+  def externalShuffleServicePort(conf: SparkConf): Int = {
+    val tmpPort = Utils.getSparkOrYarnConfig(conf, config.SHUFFLE_SERVICE_PORT.key,
+      config.SHUFFLE_SERVICE_PORT.defaultValueString).toInt
+    if (tmpPort == 0) {
+      // for testing, we set "spark.shuffle.service.port" to 0 in the yarn config, so yarn finds
+      // an open port.  But we still need to tell our spark apps the right port to use.  So
+      // only if the yarn config has the port set to 0, we prefer the value in the spark config
+      conf.get(config.SHUFFLE_SERVICE_PORT.key).toInt
+    } else {
+      tmpPort
     }
   }
 }
