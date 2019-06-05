@@ -20,8 +20,7 @@ package org.apache.spark
 // scalastyle:off
 import java.io.File
 
-import org.scalatest.{BeforeAndAfterAll, FunSuite, Outcome}
-
+import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, FunSuite, Outcome}
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.AccumulatorContext
 
@@ -52,6 +51,7 @@ import org.apache.spark.util.AccumulatorContext
 abstract class SparkFunSuite
   extends FunSuite
   with BeforeAndAfterAll
+  with BeforeAndAfterEach
   with ThreadAudit
   with Logging {
 // scalastyle:on
