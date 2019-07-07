@@ -88,6 +88,7 @@ case class CreateTempViewUsing(
       className = provider,
       options = options)
 
+    println(dataSource.providingClass)
     val catalog = sparkSession.sessionState.catalog
     val viewDefinition = Dataset.ofRows(
       sparkSession, LogicalRelation(dataSource.resolveRelation())).logicalPlan
