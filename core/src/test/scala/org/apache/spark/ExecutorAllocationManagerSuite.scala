@@ -19,7 +19,6 @@ package org.apache.spark
 
 import scala.collection.mutable
 
-//import org.mockito.ArgumentMatchers.{any, eq => meq}
 import org.mockito.Matchers.{any, eq => meq}
 import org.mockito.Mockito.{mock, never, verify, when}
 import org.scalatest.{BeforeAndAfter, PrivateMethodTester}
@@ -987,7 +986,7 @@ class ExecutorAllocationManagerSuite extends SparkFunSuite {
   private def createManager(
       conf: SparkConf,
       clock: Clock = new SystemClock()): ExecutorAllocationManager = {
-    val manager = new ExecutorAllocationManager(client, listenerBus, conf, clock)
+    val manager = new ExecutorAllocationManager(client, listenerBus, conf, clock = clock)
     managers += manager
     manager.start()
     manager

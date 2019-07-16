@@ -70,6 +70,7 @@ public class ExternalShuffleIntegrationSuite {
   static ExternalShuffleBlockHandler handler;
   static TransportServer server;
   static TransportConf conf;
+  static TransportContext transportContext;
 
   static byte[] exec0RddBlockValid = new byte[123];
   static byte[] exec0RddBlockToRemove = new byte[124];
@@ -101,7 +102,6 @@ public class ExternalShuffleIntegrationSuite {
     dataContext0 = new TestShuffleDataContext(2, 5);
     dataContext0.create();
     dataContext0.insertSortShuffleData(0, 0, exec0Blocks);
-    TransportContext transportContext = new TransportContext(conf, handler);
     dataContext0.insertCachedRddData(RDD_ID, SPLIT_INDEX_VALID_BLOCK, exec0RddBlockValid);
     dataContext0.insertCachedRddData(RDD_ID, SPLIT_INDEX_VALID_BLOCK_TO_RM, exec0RddBlockToRemove);
 
