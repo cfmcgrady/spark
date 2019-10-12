@@ -45,17 +45,9 @@ class ResolveSQLOnFile(sparkSession: SparkSession) extends Rule[LogicalPlan] {
         val dataSource = DataSource(
           sparkSession,
           paths = u.tableIdentifier.table :: Nil,
-          className = u.tableIdentifier.database.get)
+          className = u.tableIdentifier.database.get,
+          options = Map("path" -> u.tableIdentifier.table))
 
-        // `dataSource.providingClass` may throw ClassNotFoundException, then the outer try-catch
-        // will catch it and return the original plan, so that the analyzer can report table not
-        // found later.
-        val isFileFormat = classOf[FileFormat].isAssignableFrom(dataSource.providingClass)
-        if (!isFileFormat ||
-            dataSource.className.toLowerCase(Locale.ROOT) == DDLUtils.HIVE_PROVIDER) {
-          throw new AnalysisException("Unsupported data source type for direct query on files: " +
-            s"${u.tableIdentifier.database.get}")
-        }
         LogicalRelation(dataSource.resolveRelation())
       } catch {
         case _: ClassNotFoundException => u
