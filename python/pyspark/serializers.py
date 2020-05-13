@@ -65,6 +65,7 @@ if sys.version < '3':
     from itertools import izip as zip, imap as map
 else:
     import pickle
+    basestring = unicode = str
     protocol = 3
     xrange = range
 
@@ -222,6 +223,7 @@ def _create_batch(series, timezone):
     """
     import decimal
     from distutils.version import LooseVersion
+    import pandas as pd
     import pyarrow as pa
     from pyspark.sql.types import _check_series_convert_timestamps_internal
     # Make input conform to [(series1, type1), (series2, type2), ...]
@@ -253,7 +255,33 @@ def _create_batch(series, timezone):
             return pa.Array.from_pandas(s, mask=mask, type=t)
         return pa.Array.from_pandas(s, mask=mask, type=t, safe=False)
 
-    arrs = [create_array(s, t) for s, t in series]
+    arrs = []
+    for s, t in series:
+        if t is not None and pa.types.is_struct(t):
+            if not isinstance(s, pd.DataFrame):
+                raise ValueError("A field of type StructType expects a pandas.DataFrame, "
+                                 "but got: %s" % str(type(s)))
+
+            # Input partition and result pandas.DataFrame empty, make empty Arrays with struct
+            if len(s) == 0 and len(s.columns) == 0:
+                arrs_names = [(pa.array([], type=field.type), field.name) for field in t]
+            # Assign result columns by schema name if user labeled with strings
+            elif any(isinstance(name, basestring) for name in s.columns):
+                arrs_names = [(create_array(s[field.name], field.type), field.name) for field in t]
+            # Assign result columns by  position
+            else:
+                arrs_names = [(create_array(s[s.columns[i]], field.type), field.name)
+                              for i, field in enumerate(t)]
+
+            struct_arrs, struct_names = zip(*arrs_names)
+
+            # TODO: from_arrays args switched for v0.9.0, remove when bump minimum pyarrow version
+            if LooseVersion(pa.__version__) < LooseVersion("0.9.0"):
+                arrs.append(pa.StructArray.from_arrays(struct_names, struct_arrs))
+            else:
+                arrs.append(pa.StructArray.from_arrays(struct_arrs, struct_names))
+        else:
+            arrs.append(create_array(s, t))
     return pa.RecordBatch.from_arrays(arrs, ["_%d" % i for i in xrange(len(arrs))])
 
 
